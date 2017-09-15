@@ -7,9 +7,10 @@ from .datasource import PumsData, CleanedData, DirtyDataSource
 from .marginals import Marginals
 from .preprocessing import Preprocessor
 from .populationgen import Population
+from .accuracy import Accuracy
 
 # Enumerate exports, to make the linter happy.
 __all__ = [
-    HouseholdAllocator, SegmentedData, BayesianNetworkModel, Configuration,
+    Accuracy, HouseholdAllocator, SegmentedData, BayesianNetworkModel, Configuration,
     PumsData, CleanedData, Marginals, Population, Preprocessor, DirtyDataSource,
 ]
