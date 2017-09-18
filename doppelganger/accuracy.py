@@ -109,7 +109,6 @@ class Accuracy(object):
 
         # count should be its own marginal variable
         if 'num_people' in variables.keys():
-            # pdb.set_trace()
             variables['num_people'].remove('count')
 
         d = OrderedDict()
@@ -139,8 +138,7 @@ class Accuracy(object):
                 d[(variable, bin)].append(self.marginals[variable+'_'+bin].sum())
             # end bin
         # end variable
-
-        return pd.DataFrame(d.values(), index=d.keys(), columns=['pums', 'gen', 'marginal'])
+        return pd.DataFrame(list(d.values()), index=d.keys(), columns=['pums', 'gen', 'marginal'])
 
     def root_mean_squared_error(self, variables=['all']):
         '''Root mean squared error of the pums-marginals and generated-marginals vectors.
@@ -208,7 +206,8 @@ class Accuracy(object):
                 accuracy = Accuracy.from_data_dir(state, puma, data_dir)
                 df = accuracy._comparison_dataframe(variables)
                 if statistic == 'mean_absolute_pct_error':
-                    d_mp[state_puma] = np.abs(df.pums - df.marginal)/((df.pums + df.marginal)/2)
+                    d_mp[state_puma] = np.abs(
+                        df['pums'] - df['marginal'])/((df['pums'] + df['marginal'])/2)
                     d_mg[state_puma] = np.abs(df.gen - df.marginal)/((df.gen + df.marginal)/2)
                 elif statistic == 'mean_root_squared_error':
                     d_mp[state_puma] = np.sqrt(np.square(df.marginal - df.pums))
@@ -218,8 +217,8 @@ class Accuracy(object):
                     log.exception(msg)
                     raise AccuracyException()
 
-        df_mp = pd.DataFrame(d_mp.values(), index=d_mp.keys())
-        df_mg = pd.DataFrame(d_mg.values(), index=d_mg.keys())
+        df_mp = pd.DataFrame(list(d_mp.values()), index=d_mp.keys())
+        df_mg = pd.DataFrame(list(d_mg.values()), index=d_mg.keys())
 
         log.info('\nError by PUMA\n')
         df_by_puma = pd.DataFrame(
