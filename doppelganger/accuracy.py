@@ -104,24 +104,24 @@ class Accuracy(object):
                 d[(variable, bin)] = list()
                 if variable == 'age':
                     d[(variable, bin)].append(
-                            self.person_pums[self.person_pums[variable] == bin].person_weight.sum())
+                        self.person_pums[self.person_pums[variable] == bin].person_weight.sum())
                     d[(variable, bin)].append(
-                            self.generated_persons[self.generated_persons[variable] == bin]
-                            .count()[0])
+                        self.generated_persons[self.generated_persons[variable] == bin]
+                        .count()[0])
                 elif variable == 'num_people':
                     d[(variable, bin)].append(self.household_pums[
                         self.household_pums[variable] == bin].household_weight.sum())
                     d[(variable, bin)].append(
-                            self.generated_households[self.generated_households[variable] == bin]
-                            .count()[0]
-                        )
+                        self.generated_households[self.generated_households[variable] == bin]
+                        .count()[0]
+                    )
                 elif variable == 'num_vehicles':
                     d[(variable, bin)].append(self.household_pums[
                         self.household_pums[variable] == bin].household_weight.sum())
                     d[(variable, bin)].append(
-                            self.generated_households[self.generated_households[variable] == bin]
-                            .count()[0]
-                        )
+                        self.generated_households[self.generated_households[variable] == bin]
+                        .count()[0]
+                    )
                 d[(variable, bin)].append(self.marginals[variable+'_'+bin].sum())
             # end bin
         # end variable
