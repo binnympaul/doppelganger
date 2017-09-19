@@ -21,12 +21,6 @@ sh = logging.StreamHandler(stream=sys.stdout)
 sh.setLevel(logging.INFO)
 log.addHandler(fh)
 log.addHandler(sh)
-'''
-logging.basicConfig(
-        filemode='a', level=logging.INFO,
-        handlers=[logging.FileHandler('logs'), logging.StreamHandler(sys.stdout)]
-    )
-'''
 
 
 class AccuracyException(Exception):
@@ -91,7 +85,9 @@ class Accuracy(object):
         return Accuracy(df_person, df_household, df_marginal, df_gen_persons, df_gen_households)
 
     def _comparison_dataframe(self, marginal_variables=['all']):
-        '''Helper to the metrics calls
+        '''Creates the dataframe containing all values by all sources, one per column, for use in
+        the error metric calls in the Accuracy class.
+
         Args:
             variables (list(str)): list of marginal variables to compute error on. 'all' or ['all']
                 will compute error on all eligible marginal variables
@@ -162,7 +158,6 @@ class Accuracy(object):
         df = pd.DataFrame([baseline, doppel]).transpose()
         df.columns = ['marginal-pums', 'marginal-doppelganger']
         if verbose:
-            print(df)
             log.info(df)
         return np.mean(baseline), np.mean(doppel)
 
@@ -175,7 +170,6 @@ class Accuracy(object):
         df = pd.DataFrame([baseline, doppel]).transpose()
         df.columns = ['marginal-pums', 'marginal-doppelganger']
         if verbose:
-            print(df)
             log.info(df)
         return np.mean(baseline), np.mean(doppel)
 
@@ -193,25 +187,26 @@ class Accuracy(object):
             variables (list(str)): vars to run error on. must be defined in marginals.py
             statistic (str): must be an implemented error statistic:
                 mean_absolute_pct_error, root_mean_squared_error, mean_root_squared_error
-            verbose (boolean): display per-variable error
-        Returns: None
+            verbose (boolean): display per-variable error (inert for rmse b/c of the inner mean)
+        Returns:
+            error by puma (dataframe): marginal-pums, marginal-generated
+            error by variable (dataframe): marginal-pums, marginal-generated
+            mean error (dataframe): marginal-pums, marginal-generated
         '''
         d_mp = OrderedDict()  # dictionary of marginal to pums differences
         d_mg = OrderedDict()  # dictionary of marginal to generated differences
         for state, pumas in state_puma.items():
             for puma in pumas:
-                state_puma = '{}_{}'.format(state, puma)
                 if verbose:
                     log.info(' '.join(['\nrun accuracy:', state, puma]))
                 accuracy = Accuracy.from_data_dir(state, puma, data_dir)
                 df = accuracy._comparison_dataframe(variables)
                 if statistic == 'mean_absolute_pct_error':
-                    d_mp[state_puma] = np.abs(
-                        df['pums'] - df['marginal'])/((df['pums'] + df['marginal'])/2)
-                    d_mg[state_puma] = np.abs(df.gen - df.marginal)/((df.gen + df.marginal)/2)
+                    d_mp[(state, puma)] = np.abs(df.pums - df.marginal)/((df.pums + df.marginal)/2)
+                    d_mg[(state, puma)] = np.abs(df.gen - df.marginal)/((df.gen + df.marginal)/2)
                 elif statistic == 'mean_root_squared_error':
-                    d_mp[state_puma] = np.sqrt(np.square(df.marginal - df.pums))
-                    d_mg[state_puma] = np.sqrt(np.square(df.marginal - df.gen))
+                    d_mp[(state, puma)] = np.sqrt(np.square(df.marginal - df.pums))
+                    d_mg[(state, puma)] = np.sqrt(np.square(df.marginal - df.gen))
                 else:
                     msg = 'Accuracy statistic not recognized'
                     log.exception(msg)
@@ -220,19 +215,20 @@ class Accuracy(object):
         df_mp = pd.DataFrame(list(d_mp.values()), index=d_mp.keys())
         df_mg = pd.DataFrame(list(d_mg.values()), index=d_mg.keys())
 
-        log.info('\nError by PUMA\n')
         df_by_puma = pd.DataFrame(
             [df_mp.mean(axis=1), df_mg.mean(axis=1)],
             index=['marginal-pums', 'marginal-generated']).transpose()
-        log.info(df_by_puma.to_string())
 
-        log.info('\n\nError by Variable\n')
         df_by_var = pd.DataFrame(
                 [df_mp.mean(axis=0), df_mg.mean(axis=0)],
                 index=['marginal-pums', 'marginal-generated']
             ).transpose()
-        log.info(df_by_var.to_string())
-        log.info('\nAverage: by PUMA, by Variable')
-        log.info(df_by_var.mean().to_string())
+        if verbose:
+            log.info('\nError by PUMA')
+            log.info(df_by_puma.to_string())
+            log.info('\n\nError by Variable')
+            log.info(df_by_var.to_string())
+            log.info('\nAverage: by PUMA, by Variable')
+            log.info(df_by_var.mean().to_string())
 
-        return df_by_puma, df_by_var
+        return df_by_puma, df_by_var, df_by_var.mean()
