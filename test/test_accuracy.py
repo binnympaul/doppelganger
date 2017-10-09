@@ -55,7 +55,7 @@ class TestAccuracy(unittest.TestCase):
 
     @mock.patch('doppelganger.Accuracy._comparison_dataframe')
     def test_error_metrics(self, mock_comparison_dataframe):
-        accuracy = Accuracy(Mock(), Mock(), Mock(), Mock(), Mock())
+        accuracy = Accuracy(Mock(), Mock(), Mock(), Mock(), Mock(), Mock(), Mock())
         accuracy.comparison_dataframe = self._mock_comparison_dataframe()
         self.assertEqual(accuracy.root_mean_squared_error(), (1.0, 1.0))
         self.assertListEqual(accuracy.root_squared_error().mean().tolist(), [1.0, 1.0])
@@ -65,7 +65,7 @@ class TestAccuracy(unittest.TestCase):
     @mock.patch('doppelganger.Accuracy.from_data_dir')
     @mock.patch('doppelganger.Accuracy._comparison_dataframe')
     def test_error_report(self, mock_comparison_datframe, mock_from_data_dir):
-        accuracy = Accuracy(Mock(), Mock(), Mock(), Mock(), Mock())
+        accuracy = Accuracy(Mock(), Mock(), Mock(), Mock(), Mock(), Mock(), Mock())
         accuracy.comparison_dataframe = self._mock_comparison_dataframe()
         accuracy.from_data_dir.return_value = accuracy
 
