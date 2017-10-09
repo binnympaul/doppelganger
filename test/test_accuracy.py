@@ -56,29 +56,30 @@ class TestAccuracy(unittest.TestCase):
     @mock.patch('doppelganger.Accuracy._comparison_dataframe')
     def test_error_metrics(self, mock_comparison_dataframe):
         accuracy = Accuracy(Mock(), Mock(), Mock(), Mock(), Mock())
-        accuracy._comparison_dataframe.return_value = self._mock_comparison_dataframe()
-        self.assertEqual(accuracy.mean_root_squared_error(), (1.0, 1.0))
+        accuracy.comparison_dataframe = self._mock_comparison_dataframe()
         self.assertEqual(accuracy.root_mean_squared_error(), (1.0, 1.0))
-        self.assertEqual(accuracy.mean_absolute_pct_error(), (2.0, 0.66666666666666663))
+        self.assertListEqual(accuracy.root_squared_error().mean().tolist(), [1.0, 1.0])
+        self.assertListEqual(accuracy.absolute_pct_error().mean().tolist(),
+                             [2.0, 0.66666666666666663])
 
-    @mock.patch('doppelganger.Accuracy._comparison_dataframe')
     @mock.patch('doppelganger.Accuracy.from_data_dir')
-    def test_error_report(self, mock_comparison_dataframe, mock_from_data_dir):
+    @mock.patch('doppelganger.Accuracy._comparison_dataframe')
+    def test_error_report(self, mock_comparison_datframe, mock_from_data_dir):
         accuracy = Accuracy(Mock(), Mock(), Mock(), Mock(), Mock())
-        accuracy._comparison_dataframe.return_value = self._mock_comparison_dataframe()
+        accuracy.comparison_dataframe = self._mock_comparison_dataframe()
         accuracy.from_data_dir.return_value = accuracy
 
         state_puma = dict()
         state_puma['20'] = ['00500', '00602', '00604']
         state_puma['29'] = ['00901', '00902']
 
-        expected_columns = ['marginal-pums', 'marginal-generated']
+        expected_columns = ['marginal-pums', 'marginal-doppelganger']
 
         df_puma, df_variable, df_total =\
-            Accuracy.error_report(
+            accuracy.error_report(
                     state_puma, 'fake_dir',
-                    variables=['num_people', 'num_vehicles', 'age'],
-                    statistic='mean_absolute_pct_error'
+                    marginal_variables=['num_people', 'num_vehicles', 'age'],
+                    statistic='absolute_pct_error'
                     )
 
         # Test df_total
@@ -112,7 +113,7 @@ class TestAccuracy(unittest.TestCase):
                 Exception,
                 Accuracy.error_report(
                         state_puma, 'fake_dir',
-                        variables=['num_people', 'num_vehicles', 'age'],
+                        marginal_variables=['num_people', 'num_vehicles', 'age'],
                         statistic='wrong-statistic-name'
                         )
                 )

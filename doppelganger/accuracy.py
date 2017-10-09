@@ -28,16 +28,47 @@ class AccuracyException(Exception):
 
 
 class Accuracy(object):
-    def __init__(self, person_pums, household_pums, marginals,
-                 generated_persons, generated_households):
-        self.person_pums = person_pums
-        self.household_pums = household_pums
-        self.marginals = marginals
-        self.generated_persons = generated_persons
-        self.generated_households = generated_households
+    def __init__(self, person_pums, household_pums, marginal_data,
+                 generated_persons, generated_households, marginal_variables, use_all_marginals):
+        self.comparison_dataframe = Accuracy._comparison_dataframe(
+            person_pums,
+            household_pums,
+            marginal_data,
+            generated_persons,
+            generated_households,
+            marginal_variables,
+            use_all_marginals
+        )
 
     @staticmethod
-    def from_data_dir(state, puma, data_dir):
+    def from_doppelganger(
+                cleaned_data_persons,
+                cleaned_data_households,
+                marginal_data,
+                population,
+                marginal_variables=[],
+                use_all_marginals=True
+            ):
+        '''Initialize an accuracy object from doppelganger objects
+            cleaned_data_persons (doppelgange.DataSource.CleanedData) - pums person data
+            cleaned_data_households (doppelgange.DataSource.CleanedData) - pums household data
+            marginal_data (doppelganger.Marginals) - marginal data (usually census)
+            population (doppelganger.Population) - Uses: population.generated_people and
+                population.generated_households
+            marginal_variables (list(str)): list of marginal variables to compute error on.
+        '''
+        return Accuracy(
+            person_pums=cleaned_data_persons.data,
+            household_pums=cleaned_data_households.data,
+            marginal_data=marginal_data.data,
+            generated_persons=population.generated_people,
+            generated_households=population.generated_households,
+            marginal_variables=marginal_variables,
+            use_all_marginals=use_all_marginals
+        )
+
+    @staticmethod
+    def from_data_dir(state, puma, data_dir, marginal_variables, use_all_marginals):
         '''Helper method for loading datafiles with same format output by download_allocate_generate
         run script
 
@@ -45,6 +76,7 @@ class Accuracy(object):
             state: state id
             puma: puma id
             data_dir: directory with stored csv files
+            marginal_variables (list(str)): list of marginal variables to compute error on.
 
         Return: an initialized Accuracy object
         '''
@@ -54,7 +86,9 @@ class Accuracy(object):
                 data_dir + os.path.sep + FILE_PATTERN.format(state, puma, 'households_pums.csv'),
                 data_dir + os.path.sep + FILE_PATTERN.format(state, puma, 'marginals.csv'),
                 data_dir + os.path.sep + FILE_PATTERN.format(state, puma, 'people.csv'),
-                data_dir + os.path.sep + FILE_PATTERN.format(state, puma, 'households.csv')
+                data_dir + os.path.sep + FILE_PATTERN.format(state, puma, 'households.csv'),
+                marginal_variables,
+                use_all_marginals
             )
 
     @staticmethod
@@ -65,6 +99,8 @@ class Accuracy(object):
                 marginals_filepath,
                 generated_persons_filepath,
                 generated_households_filepath,
+                marginal_variables,
+                use_all_marginals
             ):
         '''Load csv files for use in accuracy calcs'''
 
@@ -82,21 +118,26 @@ class Accuracy(object):
         except IOError as e:
             log.exception('{}\n{}'.format(msg, str(e)))
             raise IOError
-        return Accuracy(df_person, df_household, df_marginal, df_gen_persons, df_gen_households)
+        return Accuracy(df_person, df_household, df_marginal,
+                        df_gen_persons, df_gen_households, marginal_variables)
 
-    def _comparison_dataframe(self, marginal_variables=['all']):
+    @staticmethod
+    def _comparison_dataframe(
+            person_pums, household_pums, marginal_data, generated_persons, generated_households,
+            marginal_variables=[], use_all_marginals=True):
         '''Creates the dataframe containing all values by all sources, one per column, for use in
         the error metric calls in the Accuracy class.
 
         Args:
-            variables (list(str)): list of marginal variables to compute error on. 'all' or ['all']
-                will compute error on all eligible marginal variables
+            marginal_variables (list(str)): list of marginal variables to compute error on.
+            use_all_marginals (bool): compute error on all eligible marginal variables.
+                TAKES PRECEDENCE over the marginal_variables argument.
         Returns:
             dataframe with pums, marginal, and generated counts per variable
         '''
 
         variables = dict()
-        if marginal_variables == 'all' or marginal_variables == ['all']:
+        if use_all_marginals is True and len(marginal_variables) <= 0:
             for control, bin_dict in marginals.CONTROLS.items():
                 variables[control] = list(bin_dict.keys())  # cast for python3 compatibility
         else:
@@ -113,45 +154,43 @@ class Accuracy(object):
                 d[(variable, bin)] = list()
                 if variable == 'age':
                     d[(variable, bin)].append(
-                        self.person_pums[self.person_pums[variable] == bin].person_weight.sum())
+                        person_pums[person_pums[variable] == bin].person_weight.sum())
                     d[(variable, bin)].append(
-                        self.generated_persons[self.generated_persons[variable] == bin]
-                        .count()[0])
+                        generated_persons[generated_persons[variable] == bin].count()[0]
+                    )
                 elif variable == 'num_people':
-                    d[(variable, bin)].append(self.household_pums[
-                        self.household_pums[variable] == bin].household_weight.sum())
+                    d[(variable, bin)].append(household_pums[
+                        household_pums[variable] == bin].household_weight.sum())
                     d[(variable, bin)].append(
-                        self.generated_households[self.generated_households[variable] == bin]
-                        .count()[0]
+                        generated_households[generated_households[variable] == bin].count()[0]
                     )
                 elif variable == 'num_vehicles':
-                    d[(variable, bin)].append(self.household_pums[
-                        self.household_pums[variable] == bin].household_weight.sum())
+                    d[(variable, bin)].append(household_pums[
+                        household_pums[variable] == bin].household_weight.sum())
                     d[(variable, bin)].append(
-                        self.generated_households[self.generated_households[variable] == bin]
-                        .count()[0]
+                        generated_households[generated_households[variable] == bin].count()[0]
                     )
-                d[(variable, bin)].append(self.marginals[variable+'_'+bin].sum())
+                d[(variable, bin)].append(marginal_data[variable+'_'+bin].sum())
             # end bin
         # end variable
         return pd.DataFrame(list(d.values()), index=d.keys(), columns=['pums', 'gen', 'marginal'])
 
-    def root_mean_squared_error(self, variables=['all']):
+    def root_mean_squared_error(self):
         '''Root mean squared error of the pums-marginals and generated-marginals vectors.
         No verbose option available due to the mean as an inner operation.
         Please use mean_root_squared_error for a verbose analog
         '''
-        df = self._comparison_dataframe(variables)
+        df = self.comparison_dataframe
         return (
                 np.sqrt(np.mean(np.square(df.pums - df.marginal))),
                 np.sqrt(np.mean(np.square(df.gen - df.marginal)))
             )
 
-    def mean_root_squared_error(self, variables=['all'], verbose=False):
+    def root_squared_error(self, verbose=False):
         '''Similar to rmse, but taking the mean at the end so that the error of individual variables
         can be analyzed if verbose is set to True
         '''
-        df = self._comparison_dataframe(variables)
+        df = self.comparison_dataframe
         baseline = np.sqrt(np.square(df.pums - df.marginal))
         doppel = np.sqrt(np.square(df.gen - df.marginal))
 
@@ -159,11 +198,11 @@ class Accuracy(object):
         df.columns = ['marginal-pums', 'marginal-doppelganger']
         if verbose:
             log.info(df)
-        return np.mean(baseline), np.mean(doppel)
+        return df
 
-    def mean_absolute_pct_error(self, variables=['all'], verbose=False):
+    def absolute_pct_error(self, verbose=False):
         '''Accuracy in Mean Absolute %Diff'''
-        df = self._comparison_dataframe(variables)
+        df = self.comparison_dataframe
         baseline = np.abs(df.pums - df.marginal)/((df.pums + df.marginal)/2)
         doppel = np.abs(df.gen - df.marginal)/((df.gen + df.marginal)/2)
 
@@ -171,11 +210,11 @@ class Accuracy(object):
         df.columns = ['marginal-pums', 'marginal-doppelganger']
         if verbose:
             log.info(df)
-        return np.mean(baseline), np.mean(doppel)
+        return df
 
     @staticmethod
-    def error_report(state_puma, data_dir,
-                     variables=['all'], statistic='mean_absolute_pct_error', verbose=False):
+    def error_report(state_puma, data_dir, marginal_variables=[], use_all_marginals=True,
+                     statistic='mean_absolute_pct_error', verbose=False):
         '''Helper method to run an accuracy stats for multiple pumas
         Args:
             state_puma (dict): dictionary of state to puma list within the state.
@@ -194,34 +233,33 @@ class Accuracy(object):
             mean error (dataframe): marginal-pums, marginal-generated
         '''
         d_mp = OrderedDict()  # dictionary of marginal to pums differences
-        d_mg = OrderedDict()  # dictionary of marginal to generated differences
+        d_md = OrderedDict()  # dictionary of marginal to generated differences
         for state, pumas in state_puma.items():
             for puma in pumas:
                 if verbose:
                     log.info(' '.join(['\nrun accuracy:', state, puma]))
-                accuracy = Accuracy.from_data_dir(state, puma, data_dir)
-                df = accuracy._comparison_dataframe(variables)
-                if statistic == 'mean_absolute_pct_error':
-                    d_mp[(state, puma)] = np.abs(df.pums - df.marginal)/((df.pums + df.marginal)/2)
-                    d_mg[(state, puma)] = np.abs(df.gen - df.marginal)/((df.gen + df.marginal)/2)
-                elif statistic == 'mean_root_squared_error':
-                    d_mp[(state, puma)] = np.sqrt(np.square(df.marginal - df.pums))
-                    d_mg[(state, puma)] = np.sqrt(np.square(df.marginal - df.gen))
+                accuracy = Accuracy.from_data_dir(state, puma, data_dir, marginal_variables)
+                if statistic == 'absolute_pct_error':
+                    d_mp[(state, puma)] = accuracy.absolute_pct_error()['marginal-pums']
+                    d_md[(state, puma)] = accuracy.absolute_pct_error()['marginal-doppelganger']
+                elif statistic == 'root_squared_error':
+                    d_mp[(state, puma)] = accuracy.root_squared_error()['marginal-pums']
+                    d_md[(state, puma)] = accuracy.root_squared_error()['marginal-doppelganger']
                 else:
                     msg = 'Accuracy statistic not recognized'
                     log.exception(msg)
                     raise AccuracyException()
 
         df_mp = pd.DataFrame(list(d_mp.values()), index=d_mp.keys())
-        df_mg = pd.DataFrame(list(d_mg.values()), index=d_mg.keys())
+        df_md = pd.DataFrame(list(d_md.values()), index=d_md.keys())
 
         df_by_puma = pd.DataFrame(
-            [df_mp.mean(axis=1), df_mg.mean(axis=1)],
-            index=['marginal-pums', 'marginal-generated']).transpose()
+            [df_mp.mean(axis=1), df_md.mean(axis=1)],
+            index=['marginal-pums', 'marginal-doppelganger']).transpose()
 
         df_by_var = pd.DataFrame(
-                [df_mp.mean(axis=0), df_mg.mean(axis=0)],
-                index=['marginal-pums', 'marginal-generated']
+                [df_mp.mean(axis=0), df_md.mean(axis=0)],
+                index=['marginal-pums', 'marginal-doppelganger']
             ).transpose()
         if verbose:
             log.info('\nError by PUMA')
